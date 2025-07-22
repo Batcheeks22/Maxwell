@@ -1,0 +1,204 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Focus Timer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #000000;
+      --accent: #007bff;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: sans-serif;
+      text-align: center;
+      padding: 2rem;
+      transition: background-color 0.5s ease, color 0.5s ease;
+    }
+    h1 { margin-bottom: 0.5rem; }
+    #quote { font-style: italic; margin-bottom: 1rem; }
+    #timer { font-size: 3rem; margin: 1rem 0; }
+    button, select, input {
+      margin: 0.5rem;
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+    }
+    iframe {
+      border: none;
+      width: 100%;
+      max-width: 400px;
+      height: 80px;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body class="theme-light">
+  <h1>🎧 Focus Timer</h1>
+  <div id="quote">Loading motivational quote...</div>
+
+  <select id="mode">
+    <option value="pomodoro">Pomodoro (25/5)</option>
+    <option value="countdown">Countdown</option>
+    <option value="stopwatch">Stopwatch</option>
+  </select>
+
+  <input type="number" id="cd-minutes" placeholder="Countdown minutes" style="display:none;">
+
+  <select id="theme">
+    <option value="light">Light</option>
+    <option value="dark">Dark</option>
+    <option value="nature">Nature</option>
+  </select>
+
+  <select id="playlist">
+    <option value="focus1">LoFi Mind State</option>
+    <option value="focus2">Jazz Vibes</option>
+    <option value="focus3">Nature Ambience</option>
+    <option value="focus4">Piano Chill</option>
+    <option value="focus5">Deep Focus</option>
+    <option value="focus6">Instrumental Beats</option>
+    <option value="focus7">LoFi Drive</option>
+    <option value="shuffle">🎲 Shuffle Theme</option>
+  </select>
+
+  <div id="timer">25:00</div>
+  <button id="start">Start</button>
+  <button id="pause" disabled>Pause</button>
+  <button id="reset" disabled>Reset</button>
+
+  <iframe id="spotify" src="https://open.spotify.com/embed/playlist/3Ouug2SJmESNz4J5u5VYTZ"></iframe>
+  <audio id="alert-sound" src="https://freesound.org/data/previews/414/414209_5123851-lq.mp3"></audio>
+
+  <div>Completed Sessions: <span id="session-count">0</span></div>
+
+  <script>
+    const playlists = {
+      focus1: '3Ouug2SJmESNz4J5u5VYTZ',
+      focus2: '0QHlsDU4KDoHYEpr5E0eoT',
+      focus3: '28bv7fnn7wbPO2A0LR7mGM',
+      focus4: '2DxdgUEqzyx04Ey2AgmFgn',
+      focus5: '4CkzGT9VSVmki7cHSbujmP',
+      focus6: '0YW5OyeNgednDlk5Nu27Ke',
+      focus7: '114Qoxh1S8ZNUew5dVHSZJ'
+    };
+
+    const themesByPlaylist = {
+      focus1: { '--bg': '#f3f0ff', '--text': '#2c1e5d', '--accent': '#a88eff' },
+      focus2: { '--bg': '#fff6f0', '--text': '#6b3e26', '--accent': '#ffbb7c' },
+      focus3: { '--bg': '#e9fbe4', '--text': '#224422', '--accent': '#88cc99' },
+      focus4: { '--bg': '#fef9f3', '--text': '#5c3b28', '--accent': '#e0a96d' },
+      focus5: { '--bg': '#f0f4f8', '--text': '#223344', '--accent': '#4a90e2' },
+      focus6: { '--bg': '#f5f5f5', '--text': '#333333', '--accent': '#999999' },
+      focus7: { '--bg': '#faf6ff', '--text': '#3f2c56', '--accent': '#c8a2c8' }
+    };
+
+    let timer, mode = 'pomodoro', total = 1500, remaining = 1500;
+    const modeEl = document.getElementById('mode');
+    const themeEl = document.getElementById('theme');
+    const playlistEl = document.getElementById('playlist');
+    const cdInput = document.getElementById('cd-minutes');
+    const timerEl = document.getElementById('timer');
+    const quoteEl = document.getElementById('quote');
+    const spotify = document.getElementById('spotify');
+    const countEl = document.getElementById('session-count');
+
+    modeEl.onchange = () => {
+      mode = modeEl.value;
+      if (mode === 'countdown') {
+        cdInput.style.display = 'inline';
+        total = parseInt(cdInput.value || 25) * 60;
+      } else {
+        cdInput.style.display = 'none';
+        total = mode === 'pomodoro' ? 1500 : 0;
+      }
+      remaining = total;
+      updateTimer();
+    };
+
+    themeEl.onchange = e => {
+      document.body.className = `theme-${e.target.value}`;
+    };
+
+    playlistEl.onchange = e => {
+      let value = e.target.value;
+      if (value === 'shuffle') {
+        const keys = Object.keys(playlists);
+        value = keys[Math.floor(Math.random() * keys.length)];
+        playlistEl.value = value;
+      }
+      spotify.src = `https://open.spotify.com/embed/playlist/${playlists[value]}`;
+      const theme = themesByPlaylist[value];
+      if (theme) {
+        Object.keys(theme).forEach(key => {
+          document.documentElement.style.setProperty(key, theme[key]);
+        });
+      }
+    };
+
+    document.getElementById('start').onclick = () => {
+      document.getElementById('start').disabled = true;
+      document.getElementById('pause').disabled = false;
+      document.getElementById('reset').disabled = false;
+
+      timer = setInterval(() => {
+        if (mode === 'stopwatch') remaining++;
+        else remaining--;
+
+        updateTimer();
+
+        if (remaining <= 0 && mode !== 'stopwatch') {
+          clearInterval(timer);
+          document.getElementById('alert-sound').play();
+          incrementSession();
+        }
+      }, 1000);
+    };
+
+    document.getElementById('pause').onclick = () => {
+      clearInterval(timer);
+      document.getElementById('start').disabled = false;
+      document.getElementById('pause').disabled = true;
+    };
+
+    document.getElementById('reset').onclick = () => {
+      clearInterval(timer);
+      remaining = total;
+      updateTimer();
+      document.getElementById('start').disabled = false;
+      document.getElementById('pause').disabled = true;
+    };
+
+    function updateTimer() {
+      let m = String(Math.floor(remaining / 60)).padStart(2, '0');
+      let s = String(remaining % 60).padStart(2, '0');
+      timerEl.textContent = `${m}:${s}`;
+    }
+
+    async function loadQuote() {
+      try {
+        const res = await fetch('https://api.quotable.io/random');
+        const data = await res.json();
+        quoteEl.textContent = `"${data.content}" — ${data.author}`;
+      } catch {
+        quoteEl.textContent = "Stay focused. You got this!";
+      }
+    }
+
+    function incrementSession() {
+      const current = parseInt(localStorage.getItem('focusSessionCount') || '0');
+      localStorage.setItem('focusSessionCount', current + 1);
+      countEl.textContent = current + 1;
+    }
+
+    modeEl.dispatchEvent(new Event('change'));
+    playlistEl.dispatchEvent(new Event('change'));
+    themeEl.dispatchEvent(new Event('change'));
+    loadQuote();
+    countEl.textContent = localStorage.getItem('focusSessionCount') || '0';
+  </script>
+</body>
+</html>
